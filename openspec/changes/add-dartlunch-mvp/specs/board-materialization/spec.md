@@ -1,19 +1,20 @@
 ## ADDED Requirements
 
 ### Requirement: Map canvas snapshot becomes the board texture
-On entering `materialize`, the app SHALL snapshot the MapLibre canvas of the locked view to an image
-and apply that image as the texture of the 3D board. It SHALL NOT use a Static Maps API.
+On entering `materialize`, the app SHALL snapshot the MapLibre canvas and crop it to the viewfinder
+square, then apply that square image as the texture of the 3D board. It SHALL NOT use a Static Maps
+API.
 
-#### Scenario: Board texture is the locked map
+#### Scenario: Board texture is the viewfinder square
 - **WHEN** the user locks bounds and materialization begins
-- **THEN** the MapLibre canvas is snapshotted to an image
-- **AND** the 3D board is textured with that image
+- **THEN** the MapLibre canvas is snapshotted and cropped to the viewfinder square
+- **AND** the 3D board is textured with that square image
 - **AND** no Static Maps API request is made
 
 ### Requirement: Web Mercator projection of pins onto the board
 The app SHALL project each restaurant's latitude/longitude to normalized board (u,v) coordinates
-using Web Mercator, consistent with the snapshot image, so pin positions align with the map
-including at the edges.
+using Web Mercator, consistent with the snapshot image (the viewfinder-square crop), so pin
+positions align with the map including at the edges.
 
 #### Scenario: Pin lands at its real map position
 - **WHEN** a restaurant's lat/lng is projected to board (u,v)

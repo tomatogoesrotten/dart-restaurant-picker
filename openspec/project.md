@@ -18,15 +18,19 @@ you throw again.
 - Map board texture comes from snapshotting the MapLibre canvas locally (no Static Maps API)
 
 **Thin proxy (Node, stateless, no database):**
-- Single endpoint `GET /api/restaurants` that takes map bounds + filters, calls Google Places
-  server-side, and returns shaped restaurant JSON.
-- Holds `GOOGLE_PLACES_KEY` server-side only. The key is never serialized to the client.
+- Single endpoint `GET /api/restaurants` that takes map bounds + filters, resolves restaurants
+  server-side, and returns shaped restaurant JSON. Data source: free OpenStreetMap via the Overpass
+  API by default (no key); Google Places only when `GOOGLE_PLACES_KEY` is set.
+- `GOOGLE_PLACES_KEY` is optional and, when present, is held server-side only and never serialized
+  to the client. OSM gives name/cuisine/location; price/rating may be null and open-now is not
+  applied for OSM.
 
 ## Conventions
 
-- **Security-first data flow:** Google is never reachable from the browser. The pick-area map is
-  keyless OSM; the board texture is a local canvas snapshot; the only Google-dependent call (Places
-  search) is routed through the proxy.
+- **Security-first data flow:** no third-party key is ever in the browser. The pick-area map is
+  keyless OSM; the board texture is a local canvas snapshot; restaurant lookups go through the proxy,
+  which uses free OpenStreetMap by default (no key at all) or Google Places server-side when a key
+  is configured.
 - **Swappable data layer:** the browser talks to a `RestaurantSource` TypeScript interface. The only
   v1 implementation calls our proxy. This interface is the seam for future providers and must be
   replaceable with zero UI changes.
@@ -43,6 +47,7 @@ you throw again.
 ## Deployment / Ops
 
 - **Local-first:** `npm run dev`; Vite dev-proxy forwards `/api` to the local proxy process.
-- **Deploy:** Zeabur, two services -- static frontend + the Node proxy. `GOOGLE_PLACES_KEY` is set
-  on the proxy service only.
+- **Deploy:** Zeabur, single service -- the Node proxy serves the built frontend and `/api` from one
+  origin. `GOOGLE_PLACES_KEY` is optional (set it on the service for Google data; omit it for free
+  OSM).
 - **Production-ready** quality expected. No database in v1.

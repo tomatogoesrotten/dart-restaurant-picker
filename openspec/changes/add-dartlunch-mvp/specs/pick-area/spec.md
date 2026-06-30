@@ -32,11 +32,24 @@ selected filter values SHALL be captured as part of the locked selection.
 - **WHEN** the user sets filters and then locks the bounds
 - **THEN** the locked selection includes the chosen open-now, cuisine/type, and price-level values
 
-### Requirement: Lock bounds to start the game
-The pick-area phase SHALL provide a "lock bounds" action that captures the current map bounds plus
-the selected filters and triggers the transition to materialization.
+### Requirement: Square viewfinder frames the capture area
+The pick-area phase SHALL overlay a centered square viewfinder that shows exactly the area that will
+become the board; everything outside the square SHALL be dimmed. Map rotation SHALL be disabled so
+the frame stays north-up.
 
-#### Scenario: Locking captures bounds and advances
+#### Scenario: Viewfinder shows what will be captured
+- **WHEN** the pick-area phase is shown
+- **THEN** a centered square viewfinder marks the area that will become the board
+- **AND** the region outside the square is dimmed
+- **AND** the map cannot be rotated (it stays north-up)
+
+### Requirement: Lock bounds to start the game
+The pick-area phase SHALL provide a "lock bounds" action that captures the geographic bounds of the
+viewfinder square (via `map.unproject` of the square's corners) plus the selected filters and
+triggers the transition to materialization.
+
+#### Scenario: Locking captures the viewfinder square and advances
 - **WHEN** the user invokes "lock bounds"
-- **THEN** the current map bounds and selected filters are captured as the locked selection
+- **THEN** the geographic bounds of the viewfinder square (not the full map viewport) and the
+  selected filters are captured as the locked selection
 - **AND** the app transitions to the `materialize` phase

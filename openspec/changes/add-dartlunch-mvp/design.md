@@ -2,13 +2,15 @@
 
 DartLunch is greenfield. The defining constraint is security: a Google Maps JavaScript / Static
 Maps key cannot be hidden in a browser bundle, and a leaked key is a billing liability. Everything
-below follows from keeping Google out of the browser entirely while still using Google Places data
-for restaurants.
+below follows from keeping any paid/keyed API out of the browser entirely. Restaurant data comes
+from free OpenStreetMap (via the Overpass API) by default, with Google Places used only when a key
+is configured server-side.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- The browser never holds or transmits a Google key. Only our own proxy talks to Google.
+- The browser never holds or transmits a Google key. Only our own proxy talks to a restaurant data
+  source (OpenStreetMap by default, Google only when a key is set).
 - A pick-area map that needs no key (OSM raster tiles via MapLibre).
 - A 3D board whose texture is the real map and whose pins line up with the map at the edges.
 - Deterministic, production-stable dart physics with no heavyweight engine.
@@ -21,16 +23,25 @@ for restaurants.
 
 ## Decisions
 
-### D1 - Keep Google out of the browser; one thin proxy
-- **Decision:** Keyless OSM map + local canvas snapshot for the board texture. The only
-  Google-dependent call (Places search) goes through a stateless Node proxy that holds
-  `GOOGLE_PLACES_KEY` server-side and returns shaped JSON. The key is never serialized to the client.
+### D1 - Keep paid/keyed APIs out of the browser; one thin proxy; OSM data by default
+- **Decision:** Keyless OSM map + local canvas snapshot for the board texture. Restaurant search goes
+  through a stateless Node proxy that serves free OpenStreetMap data (via the Overpass API) by
+  default and calls Google Places only when `GOOGLE_PLACES_KEY` is set server-side, returning shaped
+  JSON. Any key is never serialized to the client.
 - **Why:** A Maps-JS/Static-Maps key embedded in a browser bundle is publicly readable and a billing
-  risk. A proxy is the only way to use Google data without exposing the key.
+  risk. The proxy keeps any key server-side; defaulting to OSM makes the security posture even
+  stronger -- with no key configured at all there is no billing liability and nothing to leak, and
+  Google billing (the original blocker) is no longer required to run the app.
 - **Alternatives rejected:** (a) Google Maps JS in the browser with a referrer-restricted key --
   rejected; referrer restrictions are bypassable and the key is still public. (b) Google Static Maps
   for the board image -- rejected; still needs a client-visible key. (c) A stateful backend with a
   DB -- rejected as over-built for v1; the proxy is stateless and DB-free.
+- **OSM data trade-off:** OpenStreetMap reliably has name, cuisine/type, and location, but price
+  level and rating are usually null and the "open now" filter is NOT applied (OSM `opening_hours`
+  needs a full parser). Cuisine/type filtering still works. Google stays available as an opt-in
+  richer source when a key is set.
+- **Overpass reliability:** the proxy sends a descriptive `User-Agent` (Overpass returns 406 without
+  one) and fails over across several public Overpass mirrors.
 
 ### D2 - Map: MapLibre GL + OSM raster tiles; board texture via canvas snapshot
 - **Decision:** Use MapLibre GL with OSM raster tiles for pick-area. On lock, snapshot the MapLibre
@@ -87,7 +98,8 @@ for restaurants.
   Mitigation: show required attribution; tile host is swappable if limits are hit.
 - **Hit radius tuning:** wrong radius is either frustrating or trivial. Mitigation: it is a single
   named constant tuned during playtest (D5).
-- **Proxy is the only Google touchpoint:** if the proxy is down, restaurant data is unavailable.
-  Acceptable for v1 (no caching by design); surfaced as an error state in `restaurant-data`.
+- **Proxy is the only data touchpoint:** if the proxy is down (or all Overpass mirrors fail),
+  restaurant data is unavailable. Acceptable for v1 (no caching by design); surfaced as an error
+  state in `restaurant-data`.
 - **Canvas snapshot tainting:** cross-origin tiles can taint the canvas and block `toDataURL`.
   Mitigation: request tiles with CORS enabled so the canvas stays readable.

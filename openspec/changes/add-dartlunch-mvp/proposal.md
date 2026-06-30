@@ -11,8 +11,9 @@ greenfield v1 that brings the whole flow to life.
 - Add a keyless pick-area map (MapLibre GL + OSM raster tiles) with pan/zoom, pre-throw filters
   (open now, cuisine/type, price level), and a "lock bounds" action.
 - Add a swappable `RestaurantSource` data layer; the only v1 implementation calls our own proxy.
-- Add a stateless Node proxy exposing `GET /api/restaurants` that holds `GOOGLE_PLACES_KEY`
-  server-side and calls Google Places. **The Google key is never sent to the browser.**
+- Add a stateless Node proxy exposing `GET /api/restaurants` that serves free OpenStreetMap data
+  (via the Overpass API) by default and uses Google Places only when `GOOGLE_PLACES_KEY` is set
+  server-side. **No key is required by default, and any Google key is never sent to the browser.**
 - Add board materialization: snapshot the MapLibre canvas to a texture, build the 3D board, project
   restaurant lat/lng to board (u,v) via Web Mercator, place pins, and show a brief 3rd-person
   low-poly figure holding a dart.
@@ -30,8 +31,9 @@ greenfield v1 that brings the whole flow to life.
 - `pick-area`: keyless interactive map, pan/zoom, filter controls, and lock-bounds.
 - `restaurant-data`: the `RestaurantSource` interface contract, the proxy-calling implementation,
   filter semantics, error/empty handling, and swappability.
-- `places-proxy`: the stateless Node proxy `GET /api/restaurants` contract, server-side key
-  handling, error responses, and CORS.
+- `places-proxy`: the stateless Node proxy `GET /api/restaurants` contract, OpenStreetMap/Overpass
+  as the default data source (Google Places optional when a key is set), server-side key handling,
+  error responses, and CORS.
 - `board-materialization`: canvas snapshot -> board texture, Web Mercator lat/lng->(u,v) projection,
   pin placement, and the brief 3rd-person figure.
 - `dart-throw`: first-person camera transition, aim reticle, charge/power, projectile physics,
@@ -45,8 +47,10 @@ greenfield v1 that brings the whole flow to life.
 ## Impact
 
 - **New frontend:** React + Vite + TypeScript, react-three-fiber + drei, Zustand, MapLibre GL.
-- **New proxy:** stateless Node service, one endpoint, `GOOGLE_PLACES_KEY` env var.
-- **External dependency:** Google Places API (reached only from the proxy).
+- **New proxy:** stateless Node service, one endpoint, optional `GOOGLE_PLACES_KEY` env var
+  (OpenStreetMap/Overpass is used when it is unset).
+- **External dependency:** OpenStreetMap Overpass API by default (no key, no cost); Google Places API
+  optional, reached only from the proxy when a key is set.
 - **Deployment:** Zeabur, two services (static frontend + Node proxy). No database.
 
 ## Out of Scope (v1)

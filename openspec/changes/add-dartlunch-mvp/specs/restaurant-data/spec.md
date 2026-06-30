@@ -4,8 +4,9 @@
 The browser SHALL access restaurant data only through a `RestaurantSource` TypeScript interface that
 accepts map bounds plus filters (open now, cuisine/type, price level) and resolves to a list of
 shaped restaurants. Each restaurant SHALL carry at least: name, latitude, longitude, cuisine/type,
-price level, rating, and a Google Maps link. The UI SHALL depend on this interface, not on any
-concrete implementation.
+price level, rating, and a Google Maps link. Depending on the data source behind the proxy, price
+level and rating MAY be null. The UI SHALL depend on this interface, not on any concrete
+implementation.
 
 #### Scenario: Querying returns shaped restaurants
 - **WHEN** the UI queries the `RestaurantSource` with locked bounds and filters
@@ -16,6 +17,9 @@ concrete implementation.
 ### Requirement: Proxy-calling implementation is the only v1 source
 The only v1 implementation of `RestaurantSource` SHALL call the app's own proxy endpoint
 `GET /api/restaurants`. The browser SHALL NOT call Google directly and SHALL NOT hold a Google key.
+The data origin behind the proxy is OpenStreetMap (via the Overpass API) by default, with Google
+Places used only when the proxy is configured with a key; the browser is unaware of which origin
+served the request.
 
 #### Scenario: Data comes via the proxy
 - **WHEN** the v1 `RestaurantSource` fetches restaurants
@@ -25,6 +29,8 @@ The only v1 implementation of `RestaurantSource` SHALL call the app's own proxy 
 ### Requirement: Filter semantics
 The `RestaurantSource` SHALL forward the open-now, cuisine/type, and price-level filters so the
 returned set is already filtered, and the returned restaurants become the pins on the board.
+Cuisine/type filtering always applies; some data sources (e.g. OpenStreetMap) may not apply the
+open-now filter.
 
 #### Scenario: Returned set reflects filters
 - **WHEN** the UI queries with open-now on, a chosen cuisine/type, and a chosen price level
