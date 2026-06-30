@@ -22,16 +22,6 @@ const OSM_STYLE: maplibregl.StyleSpecification = {
   layers: [{ id: "osm", type: "raster", source: "osm" }],
 };
 
-/** Capture the current map frame as a PNG data URL; "" if the canvas is tainted. */
-function snapshot(map: maplibregl.Map): string {
-  try {
-    return map.getCanvas().toDataURL("image/png");
-  } catch (err) {
-    console.warn("Map snapshot failed (canvas tainted?); using fallback.", err);
-    return "";
-  }
-}
-
 function whenIdle(map: maplibregl.Map): Promise<void> {
   return new Promise((resolve) => {
     if (map.loaded() && !map.isMoving()) resolve();
@@ -39,8 +29,52 @@ function whenIdle(map: maplibregl.Map): Promise<void> {
   });
 }
 
+/**
+ * Capture exactly the viewfinder square: its geographic bounds (via unproject)
+ * and a square crop of the map canvas as the board texture. The square framing
+ * means bounds and texture share one square frame, so pins line up with the map.
+ */
+function captureFrame(
+  map: maplibregl.Map,
+  container: HTMLElement,
+  viewfinder: HTMLElement,
+): { bounds: Bounds; texture: string } {
+  const c = container.getBoundingClientRect();
+  const v = viewfinder.getBoundingClientRect();
+  const x0 = v.left - c.left;
+  const y0 = v.top - c.top;
+  const side = v.width;
+
+  const nw = map.unproject([x0, y0]);
+  const se = map.unproject([x0 + side, y0 + side]);
+  const bounds: Bounds = {
+    north: Math.max(nw.lat, se.lat),
+    south: Math.min(nw.lat, se.lat),
+    east: Math.max(nw.lng, se.lng),
+    west: Math.min(nw.lng, se.lng),
+  };
+
+  let texture = "";
+  try {
+    const canvas = map.getCanvas();
+    const sx = (x0 / c.width) * canvas.width;
+    const sy = (y0 / c.height) * canvas.height;
+    const sw = (side / c.width) * canvas.width;
+    const sh = (side / c.height) * canvas.height;
+    const out = document.createElement("canvas");
+    out.width = out.height = 1024;
+    const ctx = out.getContext("2d");
+    ctx?.drawImage(canvas, sx, sy, sw, sh, 0, 0, 1024, 1024);
+    texture = out.toDataURL("image/png");
+  } catch (err) {
+    console.warn("Board snapshot failed (canvas tainted?); using fallback.", err);
+  }
+  return { bounds, texture };
+}
+
 export default function PickAreaMap() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewfinderRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const lockBounds = useGame((s) => s.lockBounds);
 
@@ -53,12 +87,14 @@ export default function PickAreaMap() {
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: OSM_STYLE,
-      center: [121.5654, 25.033], // sensible default; user pans / geolocates
+      center: [121.5654, 25.033],
       zoom: 15,
-      preserveDrawingBuffer: true, // required for canvas snapshot
+      preserveDrawingBuffer: true, // required for the canvas snapshot
+      dragRotate: false, // keep north-up so the square frame is axis-aligned
       attributionControl: { compact: false },
     });
-    map.addControl(new maplibregl.NavigationControl(), "bottom-right");
+    map.touchZoomRotate.disableRotation();
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     map.addControl(
       new maplibregl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
@@ -75,21 +111,15 @@ export default function PickAreaMap() {
 
   async function handleLock() {
     const map = mapRef.current;
-    if (!map || loading) return;
+    const container = containerRef.current;
+    const viewfinder = viewfinderRef.current;
+    if (!map || !container || !viewfinder || loading) return;
     setLoading(true);
     setError(null);
     try {
       await whenIdle(map);
-      const b = map.getBounds();
-      const bounds: Bounds = {
-        north: b.getNorth(),
-        south: b.getSouth(),
-        east: b.getEast(),
-        west: b.getWest(),
-      };
-      const texture = snapshot(map);
+      const { bounds, texture } = captureFrame(map, container, viewfinder);
       const restaurants = await restaurantSource.fetch(bounds, filters);
-      // Empty is valid (board with no pins); the materialize/aim flow handles it.
       lockBounds({ bounds, filters }, restaurants, texture);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -100,6 +130,47 @@ export default function PickAreaMap() {
   return (
     <div style={{ position: "absolute", inset: 0 }}>
       <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
+
+      {/* Square viewfinder: everything outside it is dimmed; this becomes the board. */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          ref={viewfinderRef}
+          style={{
+            width: "72vmin",
+            height: "72vmin",
+            position: "relative",
+            border: "2px solid rgba(226,59,59,0.95)",
+            borderRadius: 10,
+            boxShadow: "0 0 0 100vmax rgba(13,16,20,0.45)",
+          }}
+        >
+          <span
+            style={{
+              position: "absolute",
+              top: -30,
+              left: 0,
+              fontFamily: "ui-monospace, monospace",
+              fontSize: 12,
+              color: "var(--ink)",
+              background: "rgba(13,16,20,0.78)",
+              border: "1px solid var(--line)",
+              padding: "4px 9px",
+              borderRadius: 7,
+              whiteSpace: "nowrap",
+            }}
+          >
+            🎯 this square becomes your board
+          </span>
+        </div>
+      </div>
 
       <div
         style={{
@@ -139,7 +210,8 @@ export default function PickAreaMap() {
             DartLunch
           </div>
           <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--ink-dim)" }}>
-            Frame your lunch radius, set filters, then lock the board.
+            Drag the map to frame your lunch area inside the box, set filters, then
+            lock the board.
           </p>
         </div>
 
