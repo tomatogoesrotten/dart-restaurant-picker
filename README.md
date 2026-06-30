@@ -12,9 +12,10 @@ Five phases: **pick-area → materialize → aim → throw → result/retry**.
 - **Keyless in the browser.** The pick-area map is MapLibre + OpenStreetMap
   tiles (no key). The 3D board texture is a snapshot of that map canvas (no
   Static Maps API). The browser never holds a Google key.
-- **Thin proxy holds the key.** Restaurant data comes from Google Places, called
-  **server-side only** by a stateless proxy (`/api/restaurants`). The key never
-  reaches the browser, the bundle, or the network tab.
+- **Free data, no key.** Restaurant data comes from **OpenStreetMap** (Overpass
+  API) through a stateless proxy (`/api/restaurants`) — no API key, no cost.
+  Optionally set a Google Places key for richer data (ratings/price/open-now);
+  when present the proxy uses Google instead, server-side only.
 - **Deterministic throw.** Analytic projectile physics + a raycast against the
   board plane; a tunable hit radius decides hit vs miss. No physics engine.
 
@@ -25,18 +26,14 @@ npm install
 npm run dev        # starts the Vite frontend (5173) + the proxy (8787) together
 ```
 
-Open http://localhost:5173.
+Open http://localhost:5173. **It just works — free OpenStreetMap data, no key
+needed.**
 
-**Without a Google key** (play immediately on sample data):
-
-```bash
-# PowerShell:  $env:DARTLUNCH_MOCK = "1"; npm run dev
-# bash:        DARTLUNCH_MOCK=1 npm run dev
-```
-
-**With real restaurants:** copy `.env.example` → `.env`, set `GOOGLE_PLACES_KEY`
-(enable the *Places API (New)* in Google Cloud + billing), then `npm run dev`.
-Without a key and without mock mode the proxy fails safe (500, no Google call).
+- **Offline / sample data:** `DARTLUNCH_MOCK=1 npm run dev`
+  (PowerShell: `$env:DARTLUNCH_MOCK="1"; npm run dev`).
+- **Richer data (optional):** copy `.env.example` → `.env`, set
+  `GOOGLE_PLACES_KEY` (enable *Places API (New)* + billing). The proxy then uses
+  Google instead of OpenStreetMap, still server-side only.
 
 ## Test & build
 

@@ -10,6 +10,7 @@ import {
   applyFilters,
   fetchRestaurants,
 } from "./places.js";
+import { fetchFromOverpass } from "./overpass.js";
 import { MOCK_RESTAURANTS } from "./mock.js";
 
 const PORT = process.env.PORT || 8787;
@@ -34,28 +35,28 @@ app.get("/api/restaurants", async (req, res) => {
   const mockMode = process.env.DARTLUNCH_MOCK === "1";
   const key = process.env.GOOGLE_PLACES_KEY;
 
-  if (mockMode) {
-    const inBounds = MOCK_RESTAURANTS.filter(
-      (r) =>
-        r.lat <= bounds.north &&
-        r.lat >= bounds.south &&
-        r.lng <= bounds.east &&
-        r.lng >= bounds.west,
-    );
-    res.status(200).json({ restaurants: applyFilters(inBounds, filters) });
-    return;
-  }
-
-  if (!key) {
-    res.status(500).json({ error: "Restaurant service is not configured." });
-    return;
-  }
-
   try {
-    const shaped = await fetchRestaurants(bounds, filters, key);
-    res.status(200).json({ restaurants: applyFilters(shaped, filters) });
+    let restaurants;
+    if (mockMode) {
+      const inBounds = MOCK_RESTAURANTS.filter(
+        (r) =>
+          r.lat <= bounds.north &&
+          r.lat >= bounds.south &&
+          r.lng <= bounds.east &&
+          r.lng >= bounds.west,
+      );
+      restaurants = applyFilters(inBounds, filters);
+    } else if (key) {
+      // Optional richer data if you have a Google key (ratings/price/open-now).
+      restaurants = applyFilters(await fetchRestaurants(bounds, filters, key), filters);
+    } else {
+      // Default: free OpenStreetMap data — no key, no cost. Cuisine filter is
+      // applied inside; OSM lacks reliable price/open-now so those are not.
+      restaurants = await fetchFromOverpass(bounds, filters);
+    }
+    res.status(200).json({ restaurants });
   } catch {
-    // ponytail: never forward the upstream error (could echo the key).
+    // ponytail: never forward the upstream error (could echo a key).
     res.status(502).json({ error: "Upstream restaurant lookup failed." });
   }
 });
