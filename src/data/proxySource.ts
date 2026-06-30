@@ -24,7 +24,11 @@ export class ProxyRestaurantSource implements RestaurantSource {
       res = await fetch(`${this.baseUrl}/restaurants?${params.toString()}`);
     } catch (cause) {
       // Network/transport failure — surface as an error the UI can show.
-      throw new Error("Could not reach the restaurant service.", { cause });
+      // In dev this usually means the proxy isn't running (frontend started alone).
+      const hint = import.meta.env.DEV
+        ? " Is the proxy running? Start everything with `npm run dev`."
+        : "";
+      throw new Error("Could not reach the restaurant service." + hint, { cause });
     }
 
     if (!res.ok) {
